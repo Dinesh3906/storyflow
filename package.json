@@ -1,0 +1,31 @@
+{
+  "name": "storyflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "StoryFlow - Realtime Voice-Driven AI Writing Studio",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:web": "npm run build --workspace=apps/web",
+    "dev:realtime": "cd apps/realtime && go run cmd/server/main.go",
+    "dev:api": "cd apps/api && uvicorn app.main:app --reload --port 8000",
+    "test": "npm run test --workspaces --if-present && pytest tests"
+  },
+  "keywords": [
+    "storytelling",
+    "speech-to-text",
+    "realtime",
+    "ai-writing",
+    "websocket",
+    "deepgram",
+    "gemini",
+    "telugu",
+    "hindi",
+    "transliteration"
+  ],
+  "author": "StoryFlow Core Team",
+  "license": "Apache-2.0"
+}

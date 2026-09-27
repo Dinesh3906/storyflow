@@ -41,6 +41,7 @@ wheels/
 # Go
 bin/
 pkg/
+.tools/
 
 # Environment Variables
 .env

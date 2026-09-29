@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useStoryStore } from '../lib/store';
 
 interface UseRealtimeSocketProps {
@@ -19,6 +19,7 @@ export function useRealtimeSocket({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isManuallyClosedRef = useRef(false);
+  const [isConnected, setIsConnected] = useState(false);
 
   const {
     language,
@@ -45,6 +46,7 @@ export function useRealtimeSocket({
 
       ws.onopen = () => {
         reconnectAttemptsRef.current = 0;
+        setIsConnected(true);
         setRecordingState('connecting');
 
         // Start heartbeat ping every 15s
@@ -108,7 +110,13 @@ export function useRealtimeSocket({
               break;
 
             case 'transcript.final':
-              // Final speech segment confirmed
+              // Immediately show finalized spoken text in provisional stream
+              {
+                const finalText = payload.processedText || payload.rawText || payload.text;
+                if (finalText) {
+                  setLiveProvisionalText(finalText);
+                }
+              }
               break;
 
             case 'story.paragraph.final':
@@ -134,6 +142,7 @@ export function useRealtimeSocket({
       };
 
       ws.onclose = () => {
+        setIsConnected(false);
         if (heartbeatTimerRef.current) {
           clearInterval(heartbeatTimerRef.current);
           heartbeatTimerRef.current = null;
@@ -185,6 +194,7 @@ export function useRealtimeSocket({
       socketRef.current.close();
       socketRef.current = null;
     }
+    setIsConnected(false);
     setRecordingState('idle');
   }, [setRecordingState]);
 
@@ -199,6 +209,24 @@ export function useRealtimeSocket({
           payload: {
             data: base64Data,
             rmsLevel,
+            durationMs: 30,
+          },
+        })
+      );
+    }
+  }, []);
+
+  const sendSpeechTranscript = useCallback((text: string, isFinal: boolean) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({
+          type: 'audio.chunk',
+          sessionId: 'client',
+          sequence: Date.now(),
+          timestamp: new Date().toISOString(),
+          payload: {
+            text,
+            isFinal,
             durationMs: 30,
           },
         })
@@ -234,6 +262,24 @@ export function useRealtimeSocket({
     }
   }, [storyId]);
 
+  const stopSession = useCallback(() => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      try {
+        socketRef.current.send(
+          JSON.stringify({
+            type: 'audio.stop',
+            sessionId: 'client',
+            sequence: Date.now(),
+            timestamp: new Date().toISOString(),
+            payload: { storyId },
+          })
+        );
+      } catch (e) {
+        console.warn('Failed to send audio.stop:', e);
+      }
+    }
+  }, [storyId]);
+
   useEffect(() => {
     return () => {
       disconnect();
@@ -244,8 +290,10 @@ export function useRealtimeSocket({
     connect,
     disconnect,
     sendAudioChunk,
+    sendSpeechTranscript,
     pauseSession,
     resumeSession,
-    isConnected: socketRef.current?.readyState === WebSocket.OPEN,
+    stopSession,
+    isConnected,
   };
 }

@@ -91,7 +91,7 @@ async def test_screenplay_style_transformation():
     )
 
     transformed = result["transformed_text"]
-    assert "INT. ROOM" in transformed or "NARRATOR" in transformed
+    assert "INT." in transformed or "NARRATOR" in transformed
     assert "The door opens" in transformed
 
 

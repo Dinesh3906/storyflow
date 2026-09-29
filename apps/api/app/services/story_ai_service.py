@@ -36,6 +36,8 @@ class StoryAIService:
         """
         Processes text transformation across styles and writing modes.
         Preserves language identity and enforces anti-hallucination contracts.
+
+        Engine priority: Groq → Gemini → Rule-based deterministic
         """
         start_time = time.perf_counter()
 
@@ -46,7 +48,32 @@ class StoryAIService:
             selected_text, detected_lang, script_mode
         )
 
-        # If Gemini API key is configured, use Gemini API
+        # ── Engine 1: Groq (primary — ultra-fast LPU inference) ──────────
+        if settings.GROQ_API_KEY:
+            try:
+                from app.services.groq_ai_service import GroqAIService
+                transformed = await GroqAIService.transform_text(
+                    action=action,
+                    text=normalized_text,
+                    language=detected_lang,
+                    script_mode=script_mode,
+                    style=style,
+                    writing_mode=writing_mode,
+                    context=full_story_context,
+                )
+                if transformed and transformed.strip():
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+                    return {
+                        "transformed_text": transformed.strip(),
+                        "preserved_language": detected_lang,
+                        "execution_time_ms": round(duration_ms, 2),
+                        "engine": "groq"
+                    }
+                logger.warning("Groq returned empty text, falling back to deterministic processing")
+            except Exception as e:
+                logger.warning(f"Groq API call failed, trying next engine: {e}")
+
+        # ── Engine 2: Gemini (legacy fallback) ───────────────────────────
         if settings.GEMINI_API_KEY:
             try:
                 transformed = await cls._call_gemini_api(
@@ -68,7 +95,7 @@ class StoryAIService:
             except Exception as e:
                 logger.warning(f"Gemini API call failed, falling back to local deterministic engine: {e}")
 
-        # Deterministic Rule-Based Fallback Pipeline
+        # ── Engine 3: Deterministic Rule-Based Fallback ──────────────────
         transformed = cls._deterministic_transform(
             action=action,
             text=normalized_text,

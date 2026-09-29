@@ -155,11 +155,48 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			case protocol.EventAudioChunk:
 				var chunk struct {
-					Data string `json:"data"`
+					Data    string `json:"data"`
+					Text    string `json:"text"`
+					IsFinal bool   `json:"isFinal"`
 				}
-				if err := json.Unmarshal(baseMsg.Payload, &chunk); err == nil && chunk.Data != "" {
-					if decoded, err := base64.StdEncoding.DecodeString(chunk.Data); err == nil {
-						sess.ProcessAudio(decoded)
+				if err := json.Unmarshal(baseMsg.Payload, &chunk); err == nil {
+					if chunk.Data != "" {
+						if decoded, err := base64.StdEncoding.DecodeString(chunk.Data); err == nil {
+							sess.ProcessAudio(decoded)
+						}
+					}
+					if chunk.Text != "" {
+						if !chunk.IsFinal {
+							_ = sess.SendEvent(protocol.EventTranscriptPartial, protocol.TranscriptPartialPayload{
+								SegmentID:  fmt.Sprintf("seg_%d", time.Now().UnixNano()),
+								Text:       chunk.Text,
+								Language:   sess.Language,
+								Confidence: 0.95,
+								IsFinal:    false,
+								StartMs:    0,
+								EndMs:      1000,
+							})
+						} else {
+							_ = sess.SendEvent(protocol.EventTranscriptFinal, protocol.TranscriptFinalPayload{
+								SegmentID:  fmt.Sprintf("seg_%d", time.Now().UnixNano()),
+								RawText:    chunk.Text,
+								Language:   sess.Language,
+								Confidence: 0.98,
+								IsFinal:    true,
+								StartMs:    0,
+								EndMs:      2000,
+							})
+							_ = sess.SendEvent(protocol.EventStoryParagraphFinal, protocol.StoryParagraphFinalPayload{
+								ParagraphID:   fmt.Sprintf("p_%d", time.Now().UnixNano()),
+								RawTranscript: chunk.Text,
+								ProcessedText: chunk.Text,
+								Language:      sess.Language,
+								ScriptMode:    sess.ScriptMode,
+								Style:         sess.Style,
+								OrderIndex:    time.Now().Unix(),
+								WordCount:     len(strings.Fields(chunk.Text)),
+							})
+						}
 					}
 				}
 

@@ -14,6 +14,8 @@ import {
   FolderPlus,
   Sparkles,
   FileText,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 
@@ -31,6 +33,8 @@ export default function DashboardPage() {
   const [newLanguage, setNewLanguage] = useState('auto');
   const [newScriptMode, setNewScriptMode] = useState('romanized');
   const [newStyle, setNewStyle] = useState('narrative');
+  const [isCreatingStory, setIsCreatingStory] = useState(false);
+  const [createStoryError, setCreateStoryError] = useState<string | null>(null);
 
   // New Project Form
   const [newProjTitle, setNewProjTitle] = useState('');
@@ -78,11 +82,37 @@ export default function DashboardPage() {
 
   const handleCreateStory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() || !selectedProjectId) return;
+    if (!newTitle.trim()) return;
+
+    setIsCreatingStory(true);
+    setCreateStoryError(null);
 
     try {
+      let projId = selectedProjectId;
+      if (!projId) {
+        try {
+          const projs = await api.getProjects();
+          if (projs && projs.length > 0) {
+            projId = projs[0].id;
+            setProjects(projs);
+            setSelectedProjectId(projId);
+          } else {
+            const defaultProj = await api.createProject('My Stories & Manuscripts', 'Primary workspace');
+            projId = defaultProj.id;
+            setProjects([defaultProj]);
+            setSelectedProjectId(projId);
+          }
+        } catch {
+          // If fetching projects fails, will check projId below
+        }
+      }
+
+      if (!projId) {
+        throw new Error('Project could not be found or created. Make sure backend is running on port 8000.');
+      }
+
       const created = await api.createStory({
-        projectId: selectedProjectId,
+        projectId: projId,
         title: newTitle.trim(),
         language: newLanguage,
         scriptMode: newScriptMode,
@@ -92,8 +122,11 @@ export default function DashboardPage() {
       setIsNewStoryModalOpen(false);
       setNewTitle('');
       router.push(`/story/${created.id}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create story:', err);
+      setCreateStoryError(err.message || 'Failed to create story. Make sure the backend server is running on port 8000.');
+    } finally {
+      setIsCreatingStory(false);
     }
   };
 
@@ -322,19 +355,37 @@ export default function DashboardPage() {
                 </select>
               </div>
 
+              {createStoryError && (
+                <div className="p-3 rounded-lg bg-red-950/80 border border-red-800 text-xs text-red-300 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                  <span>{createStoryError}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setIsNewStoryModalOpen(false)}
+                  onClick={() => {
+                    setIsNewStoryModalOpen(false);
+                    setCreateStoryError(null);
+                  }}
                   className="px-4 py-2 rounded-lg text-xs font-medium text-studio-400 hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-md"
+                  disabled={isCreatingStory || !newTitle.trim()}
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md transition-all"
                 >
-                  Create &amp; Open
+                  {isCreatingStory ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <span>Create &amp; Open</span>
+                  )}
                 </button>
               </div>
             </form>

@@ -11,7 +11,7 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "build:web": "npm run build --workspace=apps/web",
     "dev:realtime": "cd apps/realtime && go run cmd/server/main.go",
-    "dev:api": "cd apps/api && uvicorn app.main:app --reload --port 8000",
+    "dev:api": "cd apps/api && python -m uvicorn app.main:app --reload --port 8000",
     "test": "npm run test --workspaces --if-present && pytest tests"
   },
   "keywords": [

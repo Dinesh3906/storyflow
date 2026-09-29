@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), ".env"),
+        env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))), ".env"),
         env_file_encoding="utf-8",
         extra="ignore"
     )
@@ -40,7 +40,14 @@ class Settings(BaseSettings):
     # Speech-to-Text
     DEEPGRAM_API_KEY: str = ""
 
-    # AI Model
+    # Local Speech-to-Text (faster-whisper)
+    WHISPER_MODEL_SIZE: str = "base"
+    WHISPER_DEVICE: str = "cpu"
+    WHISPER_COMPUTE_TYPE: str = "int8"
+
+    # AI Model — Groq (primary), Gemini (legacy fallback)
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "default"
     GEMINI_API_KEY: str = ""
 
     # Storage

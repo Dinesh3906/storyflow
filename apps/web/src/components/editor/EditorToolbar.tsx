@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
+  Activity,
+  UploadCloud,
 } from 'lucide-react';
 import { useStoryStore } from '../../lib/store';
 import {
@@ -24,9 +26,12 @@ import {
 interface EditorToolbarProps {
   onExport: () => void;
   onSaveManual: () => void;
+  onOpenAudioTest?: () => void;
+  onUploadAudio?: (file: File) => void;
 }
 
-export function EditorToolbar({ onExport, onSaveManual }: EditorToolbarProps) {
+export function EditorToolbar({ onExport, onSaveManual, onOpenAudioTest, onUploadAudio }: EditorToolbarProps) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const {
     title,
     language,
@@ -167,6 +172,45 @@ export function EditorToolbar({ onExport, onSaveManual }: EditorToolbarProps) {
           >
             <History className="w-4 h-4" />
           </button>
+
+          {/* Voice Audio Diagnostics & Test Suite */}
+          {onOpenAudioTest && (
+            <button
+              onClick={onOpenAudioTest}
+              className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-md border border-red-200 dark:border-red-900/60 bg-red-50/80 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 transition-colors"
+              title="Open Voice Audio Diagnostics & Test Cases"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Voice Test</span>
+            </button>
+          )}
+
+          {/* Upload Audio File (MP3 / WAV) for Whisper STT */}
+          {onUploadAudio && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onUploadAudio(file);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-md border border-purple-200 dark:border-purple-900/60 bg-purple-50/80 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-400 transition-colors shadow-sm"
+                title="Upload MP3 / Audio file for Whisper transcription"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>Upload Audio</span>
+              </button>
+            </>
+          )}
 
           {/* Export PDF Button */}
           <button

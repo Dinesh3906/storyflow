@@ -65,14 +65,19 @@ export function StoryEditor({ onSelectText }: StoryEditorProps) {
 
       {/* Realtime Live Provisional Transcription Stream */}
       {liveProvisionalText && (
-        <div className="mt-4 p-4 rounded-lg bg-studio-100/70 dark:bg-studio-900/60 border border-studio-200 dark:border-studio-800/80 transition-all duration-300">
-          <div className="flex items-center gap-2 mb-1.5 text-xs font-mono font-medium text-amber-600 dark:text-amber-400">
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-            <span>LIVE SPEECH STREAM</span>
+        <div className="mt-3 p-4 rounded-xl bg-amber-500/10 dark:bg-amber-400/10 border-2 border-dashed border-amber-500/40 dark:border-amber-400/30 backdrop-blur-sm transition-all shadow-sm">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="flex items-center gap-2 text-xs font-mono font-bold tracking-wider text-amber-600 dark:text-amber-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+              LIVE DICTATION STREAM
+            </span>
+            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-800 dark:text-amber-200">
+              Typing &bull; Auto-committing to canvas
+            </span>
           </div>
-          <p className="font-serif italic text-lg text-studio-700 dark:text-studio-300 transition-opacity">
+          <p className="font-serif italic text-xl text-studio-900 dark:text-studio-100 transition-opacity">
             {liveProvisionalText}
-            <span className="inline-block w-1.5 h-4 ml-1 bg-amber-500 animate-pulse-recording" />
+            <span className="inline-block w-2 h-5 ml-1.5 bg-amber-500 animate-pulse align-middle" />
           </p>
         </div>
       )}

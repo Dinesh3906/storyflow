@@ -1,21 +1,26 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from app.core.config import settings
-
-# Password hashing configuration using bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Securely verify password against hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Securely verify password against hash using bcrypt."""
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8")[:72],
+            hashed_password.encode("utf-8")
+        )
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
     """Generate bcrypt password hash."""
-    return pwd_context.hash(password)
+    pwd_bytes = password.encode("utf-8")[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:

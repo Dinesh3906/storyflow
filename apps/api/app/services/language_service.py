@@ -5,6 +5,7 @@ from typing import Tuple, Dict
 UNICODE_RANGES = {
     "te": (0x0C00, 0x0C7F),  # Telugu
     "hi": (0x0900, 0x097F),  # Devanagari (Hindi)
+    "ur": (0x0600, 0x06FF),  # Perso-Arabic / Urdu (treated as Hindi speech)
     "ta": (0x0B80, 0x0BFF),  # Tamil
     "kn": (0x0C80, 0x0CFF),  # Kannada
     "bn": (0x0980, 0x09FF),  # Bengali
@@ -55,7 +56,7 @@ class LanguageService:
         # 1. Check for native Indic scripts first
         script = cls.detect_script(cleaned)
         if script in UNICODE_RANGES:
-            return script, 0.98
+            return ("hi" if script == "ur" else script), 0.98
 
         # 2. Check for Romanized vocabulary markers (Teluglish / Hinglish)
         words = set(re.findall(r"\b[a-z']+\b", cleaned))

@@ -13,6 +13,7 @@ from app.api.v1.ai import router as ai_router
 from app.api.v1.export import router as export_router
 from app.api.v1.health import router as health_router
 from app.api.v1.admin import router as admin_router
+from app.api.v1.transcribe import router as transcribe_router
 from app.api.v1.websocket_gateway import ws_router
 
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
@@ -54,6 +55,7 @@ app.include_router(versions_router, prefix=api_v1_prefix)
 app.include_router(ai_router, prefix=api_v1_prefix)
 app.include_router(export_router, prefix=api_v1_prefix)
 app.include_router(admin_router, prefix=api_v1_prefix)
+app.include_router(transcribe_router, prefix=api_v1_prefix)
 app.include_router(health_router)
 app.include_router(ws_router)
 

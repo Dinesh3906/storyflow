@@ -16,6 +16,7 @@ import { StoryEditor } from '../../../components/editor/StoryEditor';
 import { VoiceControlBar } from '../../../components/editor/VoiceControlBar';
 import { AIToolbar } from '../../../components/editor/AIToolbar';
 import { VersionHistoryDrawer } from '../../../components/editor/VersionHistoryDrawer';
+import { VoiceAudioTestModal } from '../../../components/editor/VoiceAudioTestModal';
 
 export default function StoryWorkspacePage() {
   const params = useParams();
@@ -25,10 +26,14 @@ export default function StoryWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [selectedText, setSelectedText] = useState<string>('');
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [audioTestModalOpen, setAudioTestModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
 
+  const commitTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
   const {
+    language,
     setStory,
     updateProcessedText,
     recordingState,
@@ -43,8 +48,11 @@ export default function StoryWorkspacePage() {
     connect: wsConnect,
     disconnect: wsDisconnect,
     sendAudioChunk,
+    sendSpeechTranscript,
     pauseSession: wsPause,
     resumeSession: wsResume,
+    stopSession: wsStop,
+    isConnected,
   } = useRealtimeSocket({
     storyId,
     onPartialTranscript: (text) => {
@@ -55,40 +63,113 @@ export default function StoryWorkspacePage() {
     },
   });
 
-  // Audio Recorder integration
+  // Audio Recorder & Live Speech Recognition integration
   const {
     startRecording: audioStart,
     pauseRecording: audioPause,
     resumeRecording: audioResume,
     stopRecording: audioStop,
     micLevel,
+    injectTestTranscript,
   } = useAudioRecorder({
+    language,
     onAudioChunk: (pcmBase64, rms) => {
       sendAudioChunk(pcmBase64, rms);
+    },
+    onTranscript: (text, isFinal) => {
+      if (!text.trim()) return;
+
+      // 1. Live stream syllables into provisional state immediately
+      useStoryStore.getState().setLiveProvisionalText(text);
+
+      // 2. Transmit to server WebSocket gateway
+      sendSpeechTranscript(text, isFinal);
+
+      // 3. Clear existing auto-commit timer
+      if (commitTimerRef.current) {
+        clearTimeout(commitTimerRef.current);
+        commitTimerRef.current = null;
+      }
+
+      // 4. Auto-commit fallback (commits after speech silence if server hasn't already committed)
+      commitTimerRef.current = setTimeout(() => {
+        const currentStore = useStoryStore.getState();
+        const pending = currentStore.liveProvisionalText.trim();
+        if (pending) {
+          currentStore.appendFinalParagraph(pending, pending);
+        }
+      }, isFinal ? 600 : 1500);
     },
   });
 
   // Voice Control Actions
   const handleStartRecording = useCallback(async () => {
+    useStoryStore.getState().setRecordingState('listening');
     wsConnect();
     await audioStart();
   }, [wsConnect, audioStart]);
 
   const handlePauseRecording = useCallback(() => {
+    useStoryStore.getState().setRecordingState('paused');
     audioPause();
     wsPause();
   }, [audioPause, wsPause]);
 
   const handleResumeRecording = useCallback(() => {
+    useStoryStore.getState().setRecordingState('listening');
     audioResume();
     wsResume();
   }, [audioResume, wsResume]);
 
   const handleStopRecording = useCallback(() => {
+    const store = useStoryStore.getState();
+    const pending = store.liveProvisionalText.trim();
+    if (pending) {
+      store.appendFinalParagraph(pending, pending);
+    }
+    store.setRecordingState('idle');
     audioStop();
-    wsDisconnect();
-    saveNow();
-  }, [audioStop, wsDisconnect, saveNow]);
+    wsStop();
+    setTimeout(() => {
+      wsDisconnect();
+      saveNow();
+    }, 300);
+  }, [audioStop, wsStop, wsDisconnect, saveNow]);
+
+  // Audio File Upload & Live Simulation (Whisper STT)
+  const handleUploadAudio = useCallback(async (file: File) => {
+    useStoryStore.getState().setRecordingState('listening');
+    useStoryStore.getState().setLiveProvisionalText(`Transcribing ${file.name} with local Whisper STT...`);
+    try {
+      const result = await api.transcribeAudioFile(file, language);
+      const segments = result.segments || [];
+      if (segments.length === 0 && result.text) {
+        segments.push({ start_ms: 0, end_ms: 2000, text: result.text });
+      }
+
+      // Stream segments in real-time with typing effect into editor
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        const segText = seg.text.trim();
+        if (!segText) continue;
+
+        // Show live typing provisional stream
+        useStoryStore.getState().setLiveProvisionalText(segText);
+        await new Promise((r) => setTimeout(r, 450));
+
+        // Commit line to canvas
+        useStoryStore.getState().appendFinalParagraph(segText, segText);
+      }
+      useStoryStore.getState().setLiveProvisionalText('');
+      saveNow();
+    } catch (err: any) {
+      console.error('Audio file transcription failed:', err);
+      useStoryStore.getState().setLastError(err.message || 'Audio transcription failed');
+    } finally {
+      useStoryStore.getState().setRecordingState('idle');
+      useStoryStore.getState().setLiveProvisionalText('');
+    }
+  }, [language, saveNow]);
 
   // Load story data on mount
   useEffect(() => {
@@ -185,6 +266,8 @@ export default function StoryWorkspacePage() {
       <EditorToolbar
         onExport={() => setExportModalOpen(true)}
         onSaveManual={saveNow}
+        onOpenAudioTest={() => setAudioTestModalOpen(true)}
+        onUploadAudio={handleUploadAudio}
       />
 
       {/* AI Refinement Toolbar */}
@@ -215,6 +298,17 @@ export default function StoryWorkspacePage() {
 
       {/* Slide-out Version History Drawer */}
       <VersionHistoryDrawer />
+
+      {/* Voice Audio Test & Diagnostics Modal */}
+      <VoiceAudioTestModal
+        isOpen={audioTestModalOpen}
+        onClose={() => setAudioTestModalOpen(false)}
+        micLevel={micLevel}
+        isRecording={recordingState === 'listening'}
+        onRunTestCase={(transcript, lang) => {
+          injectTestTranscript(transcript, true);
+        }}
+      />
 
       {/* Export Modal */}
       {exportModalOpen && (

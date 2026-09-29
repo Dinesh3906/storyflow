@@ -21,16 +21,17 @@ export function useStoryAutosave() {
   const lastSavedContentRef = useRef<string>('');
 
   const performSave = useCallback(async () => {
-    if (!storyId || saveStatus === 'saved') return;
+    const state = useStoryStore.getState();
+    if (!state.storyId || state.saveStatus === 'saved') return;
 
-    setSaveStatus('saving');
+    state.setSaveStatus('saving');
 
     // 1. Always backup locally first for offline resilience
     try {
-      localStorage.setItem(`storyflow_offline_${storyId}`, JSON.stringify({
-        title,
-        processedText,
-        rawTranscript,
+      localStorage.setItem(`storyflow_offline_${state.storyId}`, JSON.stringify({
+        title: state.title,
+        processedText: state.processedText,
+        rawTranscript: state.rawTranscript,
         savedAt: new Date().toISOString(),
       }));
     } catch {
@@ -39,36 +40,24 @@ export function useStoryAutosave() {
 
     // 2. Persist to API
     try {
-      await api.updateStory(storyId, {
-        title,
-        language,
-        script_mode: scriptMode,
-        style,
-        writing_mode: writingMode,
-        realtime_mode: realtimeMode,
-        processed_text: processedText,
-        raw_transcript: rawTranscript,
+      await api.updateStory(state.storyId, {
+        title: state.title,
+        language: state.language,
+        script_mode: state.scriptMode,
+        style: state.style,
+        writing_mode: state.writingMode,
+        realtime_mode: state.realtimeMode,
+        processed_text: state.processedText,
+        raw_transcript: state.rawTranscript,
       });
 
-      lastSavedContentRef.current = processedText;
-      setSaveStatus('saved');
+      lastSavedContentRef.current = state.processedText;
+      state.setSaveStatus('saved');
     } catch (err) {
       console.warn('Network autosave failed, saved locally:', err);
-      setSaveStatus('offline_saved');
+      state.setSaveStatus('offline_saved');
     }
-  }, [
-    storyId,
-    title,
-    language,
-    scriptMode,
-    style,
-    writingMode,
-    realtimeMode,
-    processedText,
-    rawTranscript,
-    saveStatus,
-    setSaveStatus,
-  ]);
+  }, []);
 
   useEffect(() => {
     if (!storyId) return;

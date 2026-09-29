@@ -42,6 +42,8 @@ wheels/
 bin/
 pkg/
 .tools/
+*.exe
+
 
 # Environment Variables
 .env
@@ -62,5 +64,10 @@ Thumbs.db
 # Storage / Artifacts
 uploads/
 storage/
-exports/*.pdf
+exports/
+apps/exports/
 scratch/
+*.db
+*.tsbuildinfo
+apps/api/aiosqlite/
+

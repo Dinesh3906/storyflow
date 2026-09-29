@@ -15,12 +15,14 @@ import {
   Languages 
 } from 'lucide-react';
 import { useStoryStore } from '../../lib/store';
+import { VoiceDiagnostics } from '../../hooks/useAudioRecorder';
 
 interface VoiceAudioTestModalProps {
   isOpen: boolean;
   onClose: () => void;
   micLevel: number;
   isRecording: boolean;
+  diagnostics?: VoiceDiagnostics;
   onRunTestCase: (transcript: string, lang: string) => void;
 }
 
@@ -29,6 +31,7 @@ export function VoiceAudioTestModal({
   onClose,
   micLevel,
   isRecording,
+  diagnostics,
   onRunTestCase,
 }: VoiceAudioTestModalProps) {
   const { language, scriptMode, style, writingMode } = useStoryStore();
@@ -226,6 +229,48 @@ export function VoiceAudioTestModal({
                   </p>
                 </div>
               </div>
+
+              {/* Live Pipeline Diagnostics Object */}
+              {diagnostics && (
+                <div className="p-4 rounded-xl border border-studio-200 dark:border-studio-800 bg-studio-50/80 dark:bg-studio-950/80 space-y-2">
+                  <h4 className="text-xs font-bold text-studio-900 dark:text-studio-100 flex items-center gap-2">
+                    <Activity className="w-3.5 h-3.5 text-red-500" />
+                    Live Speech Pipeline Diagnostics
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+                    <div className="p-2 rounded bg-studio-100 dark:bg-studio-900">
+                      <span className="text-studio-400 block text-[10px]">Permission</span>
+                      <span className="font-bold text-studio-800 dark:text-studio-200">{diagnostics.microphonePermission}</span>
+                    </div>
+                    <div className="p-2 rounded bg-studio-100 dark:bg-studio-900">
+                      <span className="text-studio-400 block text-[10px]">Audio Track</span>
+                      <span className="font-bold text-studio-800 dark:text-studio-200">{diagnostics.streamActive ? 'Active' : 'Inactive'}</span>
+                    </div>
+                    <div className="p-2 rounded bg-studio-100 dark:bg-studio-900">
+                      <span className="text-studio-400 block text-[10px]">Audio Engine</span>
+                      <span className="font-bold text-studio-800 dark:text-studio-200">{diagnostics.usingAudioWorklet ? 'AudioWorklet' : 'ScriptProcessor'}</span>
+                    </div>
+                    <div className="p-2 rounded bg-studio-100 dark:bg-studio-900">
+                      <span className="text-studio-400 block text-[10px]">ASR State</span>
+                      <span className="font-bold text-studio-800 dark:text-studio-200">{diagnostics.recognitionState}</span>
+                    </div>
+                    <div className="p-2 rounded bg-studio-100 dark:bg-studio-900 col-span-2">
+                      <span className="text-studio-400 block text-[10px]">Last Event</span>
+                      <span className="text-studio-700 dark:text-studio-300 truncate block">{diagnostics.lastRecognitionEvent || 'none'}</span>
+                    </div>
+                    <div className="p-2 rounded bg-studio-100 dark:bg-studio-900 col-span-2">
+                      <span className="text-studio-400 block text-[10px]">Last Error</span>
+                      <span className="text-amber-600 dark:text-amber-400 truncate block">{diagnostics.lastRecognitionError || 'none'}</span>
+                    </div>
+                  </div>
+                  {diagnostics.transcriptReceived && (
+                    <div className="p-2 rounded bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-[11px]">
+                      <span className="text-emerald-700 dark:text-emerald-300 font-semibold block text-[10px]">Last Transcript Emitted:</span>
+                      <p className="font-serif text-studio-900 dark:text-studio-100 italic">{diagnostics.transcriptReceived}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Troubleshooting Tips */}
               <div className="p-4 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60">

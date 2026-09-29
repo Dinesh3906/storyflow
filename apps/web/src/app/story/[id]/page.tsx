@@ -71,6 +71,7 @@ export default function StoryWorkspacePage() {
     stopRecording: audioStop,
     micLevel,
     injectTestTranscript,
+    diagnostics,
   } = useAudioRecorder({
     language,
     onAudioChunk: (pcmBase64, rms) => {
@@ -79,26 +80,44 @@ export default function StoryWorkspacePage() {
     onTranscript: (text, isFinal) => {
       if (!text.trim()) return;
 
-      // 1. Live stream syllables into provisional state immediately
-      useStoryStore.getState().setLiveProvisionalText(text);
-
-      // 2. Transmit to server WebSocket gateway
-      sendSpeechTranscript(text, isFinal);
-
-      // 3. Clear existing auto-commit timer
-      if (commitTimerRef.current) {
-        clearTimeout(commitTimerRef.current);
-        commitTimerRef.current = null;
-      }
-
-      // 4. Auto-commit fallback (commits after speech silence if server hasn't already committed)
-      commitTimerRef.current = setTimeout(() => {
-        const currentStore = useStoryStore.getState();
-        const pending = currentStore.liveProvisionalText.trim();
-        if (pending) {
-          currentStore.appendFinalParagraph(pending, pending);
+      if (isFinal) {
+        // Clear existing auto-commit timer
+        if (commitTimerRef.current) {
+          clearTimeout(commitTimerRef.current);
+          commitTimerRef.current = null;
         }
-      }, isFinal ? 600 : 1500);
+
+        // 1. Commit finalized sentence immediately to editor canvas
+        useStoryStore.getState().appendFinalParagraph(text.trim(), text.trim());
+        useStoryStore.getState().setLiveProvisionalText('');
+
+        // 2. Transmit to server WebSocket gateway for background AI styling
+        sendSpeechTranscript(text.trim(), true);
+        saveNow();
+      } else {
+        // 1. Live stream syllables into provisional state immediately
+        useStoryStore.getState().setLiveProvisionalText(text);
+
+        // 2. Transmit interim text to server
+        sendSpeechTranscript(text, false);
+
+        // 3. Clear existing auto-commit timer
+        if (commitTimerRef.current) {
+          clearTimeout(commitTimerRef.current);
+          commitTimerRef.current = null;
+        }
+
+        // 4. Fallback commit after pause if browser didn't emit isFinal
+        commitTimerRef.current = setTimeout(() => {
+          const currentStore = useStoryStore.getState();
+          const pending = currentStore.liveProvisionalText.trim();
+          if (pending) {
+            currentStore.appendFinalParagraph(pending, pending);
+            currentStore.setLiveProvisionalText('');
+            saveNow();
+          }
+        }, 1800);
+      }
     },
   });
 
@@ -305,6 +324,7 @@ export default function StoryWorkspacePage() {
         onClose={() => setAudioTestModalOpen(false)}
         micLevel={micLevel}
         isRecording={recordingState === 'listening'}
+        diagnostics={diagnostics}
         onRunTestCase={(transcript, lang) => {
           injectTestTranscript(transcript, true);
         }}

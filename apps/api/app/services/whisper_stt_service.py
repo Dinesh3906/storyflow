@@ -151,6 +151,10 @@ class WhisperSTTService:
                     "segments": [],
                     "duration_ms": 0.0,
                 }
+
+            # Pad short utterances to at least 1.0s (16000 samples) so Whisper acoustic model receives a full receptive window
+            if len(audio_float32) < 16000:
+                audio_float32 = np.pad(audio_float32, (0, 16000 - len(audio_float32)), mode="constant")
         except Exception as e:
             logger.error(f"Error converting PCM bytes to float32: {e}")
             return {

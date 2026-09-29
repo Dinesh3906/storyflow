@@ -59,7 +59,7 @@ export default function StoryWorkspacePage() {
       // Streamed live into store
     },
     onFinalParagraph: (processed, raw) => {
-      // Automatically triggers autosave
+      saveNow();
     },
   });
 

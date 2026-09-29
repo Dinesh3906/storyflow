@@ -196,8 +196,13 @@ async def story_realtime_websocket(websocket: WebSocket, story_id: str):
                 continue
             now = time.time()
             buf_len = len(pcm_buffer)
-            # If user spoke and paused for >= 0.75s, finalize utterance
-            if has_spoken and buf_len >= 12000 and (now - last_speech_time >= 0.75):
+            silence_dur = now - last_speech_time
+            # Finalize utterance if user paused for >= 0.9s with enough context, or max chunk reached
+            if has_spoken and (
+                (buf_len >= 32000 and silence_dur >= 0.9) or
+                (buf_len >= 16000 and silence_dur >= 1.5) or
+                (buf_len >= 96000)
+            ):
                 has_spoken = False
                 buf = bytes(pcm_buffer)
                 pcm_buffer.clear()
@@ -275,7 +280,7 @@ async def story_realtime_websocket(websocket: WebSocket, story_id: str):
 
                 elif msg_type == "audio.stop":
                     await send_event("audio.stopped", {"storyId": story_id})
-                    if pcm_buffer and whisper_available and (has_spoken or len(pcm_buffer) >= 16000):
+                    if pcm_buffer and whisper_available and len(pcm_buffer) >= 8000:
                         buf = bytes(pcm_buffer)
                         pcm_buffer.clear()
                         has_spoken = False
@@ -309,7 +314,7 @@ async def story_realtime_websocket(websocket: WebSocket, story_id: str):
                             rms_level = float(np.sqrt(np.mean(chunk_arr ** 2)))
 
                         # Active speech detection
-                        if rms_level > 0.012:
+                        if rms_level > 0.003:
                             has_spoken = True
                             last_speech_time = now
 
@@ -318,17 +323,22 @@ async def story_realtime_websocket(websocket: WebSocket, story_id: str):
                             pcm_buffer = pcm_buffer[-16000:]
 
                         buf_len = len(pcm_buffer)
+                        silence_dur = now - last_speech_time
 
-                        # Finalize utterance if silence after speech (>= 0.75s silence) or max chunk (>= 3.0s = 96000 bytes)
-                        if has_spoken and buf_len >= 16000 and ((now - last_speech_time) >= 0.75 or buf_len >= 96000):
+                        # Finalize utterance if silence after speech (>= 0.9s silence on 1s+ buffer, or >= 1.5s on short buffer) or max chunk (>= 3.0s = 96000 bytes)
+                        if has_spoken and (
+                            (buf_len >= 32000 and silence_dur >= 0.9) or
+                            (buf_len >= 16000 and silence_dur >= 1.5) or
+                            (buf_len >= 96000)
+                        ):
                             if not is_transcribing:
                                 has_spoken = False
                                 last_transcribe_time = now
                                 buf_to_process = bytes(pcm_buffer)
                                 pcm_buffer.clear()
                                 asyncio.create_task(transcribe_pcm_buffer(buf_to_process, True))
-                        # Interim streaming partial transcription every ~1.2s while speaking
-                        elif has_spoken and buf_len >= 24000 and (now - last_transcribe_time) >= 1.2 and not is_transcribing:
+                        # Interim streaming partial transcription every ~1.5s while speaking with >= 32000 bytes
+                        elif has_spoken and buf_len >= 32000 and (now - last_transcribe_time) >= 1.5 and not is_transcribing:
                             last_transcribe_time = now
                             buf_to_process = bytes(pcm_buffer)
                             asyncio.create_task(transcribe_pcm_buffer(buf_to_process, False))
@@ -348,7 +358,7 @@ async def story_realtime_websocket(websocket: WebSocket, story_id: str):
                     import numpy as np
                     chunk_arr = np.frombuffer(raw_chunk, dtype=np.int16).astype(np.float32) / 32768.0
                     rms_level = float(np.sqrt(np.mean(chunk_arr ** 2)))
-                    if rms_level > 0.012:
+                    if rms_level > 0.003:
                         has_spoken = True
                         last_speech_time = now
 

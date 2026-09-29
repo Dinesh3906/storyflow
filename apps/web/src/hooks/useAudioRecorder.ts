@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useStoryStore } from '../lib/store';
 
 export interface AudioRecorderOptions {
   onAudioChunk: (pcmBase64: string, rmsLevel: number) => void;
@@ -371,14 +372,19 @@ export function useAudioRecorder({
       }
 
       // 1. Capture microphone audio stream
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
 
       mediaStreamRef.current = stream;
 
@@ -395,12 +401,7 @@ export function useAudioRecorder({
       });
 
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      let audioCtx: AudioContext;
-      try {
-        audioCtx = new AudioCtx({ sampleRate: 16000 });
-      } catch {
-        audioCtx = new AudioCtx();
-      }
+      const audioCtx = new AudioCtx();
       audioContextRef.current = audioCtx;
 
       if (audioCtx.state === 'suspended') {
@@ -408,6 +409,11 @@ export function useAudioRecorder({
       }
 
       const source = audioCtx.createMediaStreamSource(stream);
+
+      // Create a master mute gain node connected to destination to clock the Web Audio graph
+      const muteGain = audioCtx.createGain();
+      muteGain.gain.value = 0;
+      muteGain.connect(audioCtx.destination);
 
       // 2. Initialize AudioWorkletNode (replaces deprecated ScriptProcessorNode)
       let usingWorklet = false;
@@ -421,6 +427,7 @@ export function useAudioRecorder({
             if (isPausedRef.current || !isRecordingRef.current) return;
             const { buffer, rms } = event.data;
             setMicLevel(rms);
+            useStoryStore.getState().setMicLevel(rms);
 
             const pcm16 = downsampleTo16kPCM(buffer, audioCtx.sampleRate);
             const uint8 = new Uint8Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength);
@@ -437,6 +444,7 @@ export function useAudioRecorder({
           };
 
           source.connect(workletNode);
+          workletNode.connect(muteGain);
           usingWorklet = true;
           updateDiagnostics({ usingAudioWorklet: true });
         } catch (workletError) {
@@ -456,6 +464,7 @@ export function useAudioRecorder({
           const inputChannel = e.inputBuffer.getChannelData(0);
           const rms = calculateRMS(inputChannel);
           setMicLevel(rms);
+          useStoryStore.getState().setMicLevel(rms);
 
           const pcm16 = downsampleTo16kPCM(inputChannel, audioCtx.sampleRate);
           const uint8 = new Uint8Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength);
@@ -471,11 +480,8 @@ export function useAudioRecorder({
           }
         };
 
-        const muteGain = audioCtx.createGain();
-        muteGain.gain.value = 0;
         source.connect(processor);
         processor.connect(muteGain);
-        muteGain.connect(audioCtx.destination);
         updateDiagnostics({ usingAudioWorklet: false });
       }
 
@@ -505,6 +511,7 @@ export function useAudioRecorder({
     isPausedRef.current = true;
     setIsPaused(true);
     setMicLevel(0);
+    useStoryStore.getState().setMicLevel(0);
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -570,6 +577,7 @@ export function useAudioRecorder({
     setIsRecording(false);
     setIsPaused(false);
     setMicLevel(0);
+    useStoryStore.getState().setMicLevel(0);
     updateDiagnostics({
       streamActive: false,
       recognitionState: 'idle',
